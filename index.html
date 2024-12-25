@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메모장</title>
+    <style>
+        * {
+            font-family: "맑은 고딕", sans-serif;
+        }
+        body {
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            font-family: "맑은 고딕", sans-serif;
+        }
+        #left-panel, #right-panel {
+            padding: 10px;
+            overflow-y: auto;
+        }
+        #left-panel {
+            width: 40%;
+            border-right: 1px solid #ccc;
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        #right-panel {
+            width: 60%;
+            border-radius: 10px;
+            padding: 20px;
+            display: block;
+        }
+        h2 {
+            margin: 0;
+            padding: 10px 0;
+        }
+        .memo {
+            display: flex;
+            flex-direction: column;
+            padding: 5px 0;
+            border-bottom: 1px solid #ddd;
+        }
+        .memo-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            text-align: left;
+            gap: 10px;
+        }
+        .memo-title {
+            flex-grow: 1;
+            text-align: left !important;
+            margin: 0;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .memo-buttons {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        .star {
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            background-color: gray;
+            clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+        }
+        .star.favorite {
+            background-color: gold;
+        }
+        .button {
+            margin: 0;
+            cursor: pointer;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 5px 10px;
+            white-space: nowrap;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .memo-date {
+            font-size: 0.8em;
+            color: #666;
+            text-align: right;
+            margin-top: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 300px;
+            margin-top: 10px;
+            resize: both;
+            font-size: 16px;
+            font-family: "맑은 고딕", sans-serif; /* '맑은 고딕' 폰트 적용 */
+        }
+        #memo-title, #memo-content, #save-button {
+            width: 100%;
+            padding: 5px 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        #search-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+        #search-bar {
+            flex-grow: 1;
+            padding: 5px 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #search-type {
+            padding: 5px 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        @media (max-width: 768px) {
+            #left-panel, #right-panel {
+                width: 100%;
+            }
+            #left-panel {
+                border-right: none;
+                border-bottom: 1px solid #ccc;
+            }
+        }
+        /* 삭제 팝업 스타일 */
+        #delete-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none; /* 기본적으로 숨겨짐 */
+        }
+        #modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Left Panel -->
+    <div id="left-panel">
+        <h2>메모 목록</h2>
+        <div id="search-container">
+            <select id="search-type" onchange="filterMemos()">
+                <option value="all">제목 및 내용</option>
+                <option value="title">제목만</option>
+                <option value="content">내용만</option>
+            </select>
+            <input type="text" id="search-bar" placeholder="메모 검색 (제목/내용)..." oninput="filterMemos()">
+        </div>
+        <div id="memo-list"></div>
+    </div>
+
+    <!-- Right Panel -->
+    <div id="right-panel">
+        <h2>새 메모</h2>
+        <input id="memo-title" type="text" placeholder="제목을 입력하세요" class="memo-input" style="width: 100%; font-size: 18px;" />
+        <textarea id="memo-content" placeholder="메모 내용을 입력하세요" class="memo-input" style="width: 100%;" /></textarea>
+        <button id="save-button" class="button">저장하기</button>
+    </div>
+
+    <!-- Modal for Deleting Memo -->
+    <div id="delete-modal">
+        <div id="modal-content">
+            <p>메모를 정말 삭제할까요?</p>
+            <div class="modal-buttons">
+                <button id="delete-confirm-button" class="button">네</button>
+                <button id="delete-cancel-button" class="button">아니오</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const memoListElement = document.getElementById('memo-list');
+        const memoContentElement = document.getElementById('memo-content');
+        const saveButton = document.getElementById('save-button');
+        const deleteModal = document.getElementById('delete-modal');
+        const deleteConfirmButton = document.getElementById('delete-confirm-button');
+        const deleteCancelButton = document.getElementById('delete-cancel-button');
+        let memos = []; // [{ title, content, favorite, createdAt, updatedAt }]
+        let memoToDelete = null;
+        let memoToEdit = null;
+
+
+
+
+function editMemo(memo) {
+    memoToEdit = memo; // 현재 수정할 메모 저장
+    document.querySelector('h2').textContent = '메모 수정창'; // 제목 변경
+    document.getElementById('memo-title').value = memo.title; // 제목 입력
+    document.getElementById('memo-content').value = memo.content; // 내용 입력
+
+    // 저장 버튼을 수정 저장 및 취소 버튼으로 변경
+    const saveButton = document.getElementById('save-button');
+    saveButton.style.display = 'none'; // 기존 저장 버튼 숨기기
+
+    const actionContainer = document.createElement('div');
+    actionContainer.id = 'action-container';
+    actionContainer.style.display = 'flex'; // 버튼을 flex로 정렬
+    actionContainer.style.justifyContent = 'center'; // 가운데 정렬
+    actionContainer.style.gap = '10px'; // 버튼 사이 간격
+    actionContainer.style.marginTop = '10px'; // 버튼 위 간격
+
+    // 수정 저장 버튼
+    const saveEditButton = document.createElement('button');
+    saveEditButton.textContent = '수정 저장';
+    saveEditButton.className = 'button';
+    saveEditButton.onclick = saveEditedMemo;
+
+    // 취소 버튼
+    const cancelEditButton = document.createElement('button');
+    cancelEditButton.textContent = '취소';
+    cancelEditButton.className = 'button';
+    cancelEditButton.onclick = cancelEdit;
+
+    actionContainer.appendChild(saveEditButton);
+    actionContainer.appendChild(cancelEditButton);
+
+    saveButton.parentElement.appendChild(actionContainer); // 버튼 컨테이너 추가
+}
+
+// 수정 저장 기능
+function saveEditedMemo() {
+    const titleElement = document.getElementById('memo-title');
+    const contentElement = document.getElementById('memo-content');
+
+    const updatedTitle = titleElement.value.trim();
+    const updatedContent = contentElement.value.trim();
+
+    if (!updatedTitle || !updatedContent) {
+        alert("제목 및 내용을 모두 입력해주세요.");
+        return;
+    }
+
+    // 메모 업데이트
+    memoToEdit.title = updatedTitle;
+    memoToEdit.content = updatedContent;
+    memoToEdit.updatedAt = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+
+    // 메모를 배열에서 삭제 후 맨 앞으로 추가
+    const index = memos.indexOf(memoToEdit);
+    if (index > -1) {
+        memos.splice(index, 1); // 기존 위치에서 제거
+    }
+    memos.unshift(memoToEdit); // 배열 맨 앞에 추가
+
+    memoToEdit = null; // 수정 중인 메모 초기화
+    resetMemoPanel(); // 오른쪽 패널 초기화
+    saveToLocalStorage(); // 로컬 저장소 반영
+    renderMemoList(); // 목록 새로고침
+}
+
+// 수정 취소 기능
+function cancelEdit() {
+    memoToEdit = null; // 수정 중인 메모 초기화
+    resetMemoPanel(); // 오른쪽 패널 초기화
+}
+
+// 오른쪽 패널 초기화
+function resetMemoPanel() {
+    document.querySelector('h2').textContent = '새 메모'; // 제목 복원
+    document.getElementById('memo-title').value = ''; // 입력 초기화
+    document.getElementById('memo-content').value = ''; // 입력 초기화
+
+    // 기존 저장 버튼 복원
+    document.getElementById('save-button').style.display = 'block';
+
+    // 수정 저장 및 취소 버튼 제거
+    const actionContainer = document.getElementById('action-container');
+    if (actionContainer) {
+        actionContainer.remove();
+    }
+}
+
+
+
+
+
+
+        function escapeHTML(str) {
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+
+        function renderMemoList(filteredMemos = memos) {
+            memoListElement.innerHTML = '';
+
+            const sortedMemos = [...filteredMemos].sort((a, b) => {
+                if (b.favorite !== a.favorite) return b.favorite - a.favorite;
+                return new Date(b.createdAt) - new Date(a.createdAt);
+            });
+
+            sortedMemos.forEach((memo) => {
+                const memoElement = document.createElement('div');
+                memoElement.className = 'memo';
+                
+                const headerElement = document.createElement('div');
+                headerElement.className = 'memo-header';
+
+                const starElement = document.createElement('div');
+                starElement.className = `star ${memo.favorite ? 'favorite' : ''}`;
+                starElement.onclick = (event) => {
+                    event.stopPropagation();
+                    toggleFavorite(memo);
+                };
+
+                const titleElement = document.createElement('span');
+                titleElement.className = 'memo-title';
+                titleElement.textContent = memo.title;
+                // 제목 클릭 시 메모 열기 이벤트 추가
+                titleElement.onclick = (event) => {
+                    event.stopPropagation(); // 부모 요소의 클릭 이벤트가 발생하지 않도록 방지
+                    openMemo(memo);
+                };
+
+                const buttonsContainer = document.createElement('div');
+                buttonsContainer.className = 'memo-buttons';
+
+                // const openButton = document.createElement('button');
+                // openButton.className = 'button';
+                // openButton.textContent = '열기';
+                // openButton.onclick = () => openMemo(memo);
+
+                const downloadButton = document.createElement('button');
+                downloadButton.className = 'button';
+                downloadButton.textContent = '다운로드';
+                downloadButton.onclick = () => downloadMemo(memo);
+
+                const editButton = document.createElement('button');
+                editButton.className = 'button';
+                editButton.textContent = '수정';
+                editButton.onclick = () => editMemo(memo);
+
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'button';
+                deleteButton.textContent = '삭제';
+                deleteButton.onclick = () => showDeleteModal(memo);
+
+                const dateElement = document.createElement('div');
+                dateElement.className = 'memo-date';
+                dateElement.textContent = `최근 수정 날짜: ${memo.updatedAt}`;
+
+                // buttonsContainer.appendChild(openButton);
+                buttonsContainer.appendChild(downloadButton);
+                buttonsContainer.appendChild(editButton);
+                buttonsContainer.appendChild(deleteButton);
+
+                headerElement.appendChild(starElement);
+                headerElement.appendChild(titleElement);
+                headerElement.appendChild(buttonsContainer);
+
+                memoElement.appendChild(headerElement);
+                memoElement.appendChild(dateElement);
+
+                memoListElement.appendChild(memoElement);
+            });
+        }
+
+function openMemo(memo) {
+    // 새로운 창을 열고 메모 제목과 내용을 표시
+    const newWindow = window.open('', '', 'width=600,height=400');
+
+    // 새 창의 스타일을 포함한 HTML 작성
+    newWindow.document.write(`
+        <html lang="ko">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>메모 보기</title>
+            <style>
+                body {
+                    font-family: '맑은 고딕', sans-serif;
+                    margin: 20px;
+                    padding: 0;
+                }
+                h1 {
+                    font-size: 24px;
+                    font-weight: bold;
+                    margin-bottom: 20px;
+                }
+                p {
+                    font-size: 16px;
+                    line-height: 1.5;
+                }
+                button {
+                    position: absolute;
+                    bottom: 20px;
+                    margin-top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    padding: 10px 15px;
+                    font-size: 14px;
+                    font-family: '맑은 고딕', sans-serif;
+                    background-color: #007BFF;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                }
+                button:hover {
+                    background-color: #0056b3;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>${memo.title}</h1>
+            <p>${memo.content.replace(/\n/g, '<br>')}</p>
+            <button onclick="window.close()">닫기</button>
+        </body>
+        </html>
+    `);
+}
+
+
+function saveNewMemo() {
+    const titleElement = document.getElementById('memo-title');
+    const contentElement = document.getElementById('memo-content');
+
+    const title = titleElement.value.trim();
+    const content = contentElement.value.trim();
+
+    if (!title || !content) {
+        alert("제목 및 내용을 모두 입력해주세요.");
+        return;
+    }
+
+    const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+
+    // 새로운 메모 추가
+    memos.unshift({
+        title,
+        content,
+        favorite: false,
+        createdAt: now,
+        updatedAt: now,
+    });
+
+    saveToLocalStorage(); // 로컬 저장소에 반영
+    renderMemoList(); // 메모 목록 갱신
+
+    // 입력 필드 초기화
+    titleElement.value = '';
+    contentElement.value = '';
+}
+
+saveButton.onclick = saveNewMemo;
+
+
+        function showDeleteModal(memo) {
+            memoToDelete = memo;
+            deleteModal.style.display = 'block'; // 팝업창 보이기
+        }
+
+        function hideDeleteModal() {
+            deleteModal.style.display = 'none'; // 팝업창 숨기기
+            memoToDelete = null;
+        }
+
+        deleteConfirmButton.onclick = () => {
+            if (memoToDelete) {
+                const index = memos.indexOf(memoToDelete);
+                if (index > -1) {
+                    memos.splice(index, 1);
+                    saveToLocalStorage();
+                    renderMemoList();
+                }
+            }
+            hideDeleteModal();
+        };
+
+        deleteCancelButton.onclick = hideDeleteModal;
+
+        function toggleFavorite(memo) {
+            memo.favorite = !memo.favorite;
+            saveToLocalStorage();
+            renderMemoList();
+        }
+
+        function downloadMemo(memo) {
+            const blob = new Blob([memo.content], { type: 'text/plain;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `${memo.title}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('memos', JSON.stringify(memos));
+        }
+
+        function loadFromLocalStorage() {
+            const storedMemos = localStorage.getItem('memos');
+            if (storedMemos) {
+                memos = JSON.parse(storedMemos);
+            }
+
+            renderMemoList();
+        }
+
+        function filterMemos() {
+            const searchQuery = document.getElementById('search-bar').value.toLowerCase();
+            const searchType = document.getElementById('search-type').value;
+
+            let filteredMemos;
+            if (searchType === 'title') {
+                filteredMemos = memos.filter((memo) => memo.title.toLowerCase().includes(searchQuery));
+            } else if (searchType === 'content') {
+                filteredMemos = memos.filter((memo) => memo.content.toLowerCase().includes(searchQuery));
+            } else {
+                filteredMemos = memos.filter((memo) =>
+                    memo.title.toLowerCase().includes(searchQuery) ||
+                    memo.content.toLowerCase().includes(searchQuery)
+                );
+            }
+
+            renderMemoList(filteredMemos);
+        }
+
+        loadFromLocalStorage();
+    </script>
+</body>
+</html>
